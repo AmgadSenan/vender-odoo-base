@@ -1,0 +1,73 @@
+name: vender-core29
+
+services:
+  db:
+    image: postgres:17.11
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: ${VENDER_DB_PASSWORD:?Set VENDER_DB_PASSWORD in a private .env file}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odoo -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [backend]
+
+  init:
+    profiles: [setup]
+    image: vender/odoo-base:core-29
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - --db_host=db
+      - --db_port=5432
+      - --db_user=odoo
+      - --db_password=${VENDER_DB_PASSWORD:?Set VENDER_DB_PASSWORD in a private .env file}
+      - --database=vender_core
+      - --init=base_automation
+      - --without-demo
+      - --stop-after-init
+      - --no-http
+      - --max-cron-threads=0
+    volumes:
+      - odoo_data:/var/lib/odoo
+    networks: [backend]
+
+  odoo:
+    image: vender/odoo-base:core-29
+    build:
+      context: .
+      dockerfile: ci/Dockerfile.core-rc
+      args:
+        SOURCE_REVISION: ${SOURCE_REVISION:-local}
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - --db_host=db
+      - --db_port=5432
+      - --db_user=odoo
+      - --db_password=${VENDER_DB_PASSWORD:?Set VENDER_DB_PASSWORD in a private .env file}
+      - --database=vender_core
+      - --db-filter=^vender_core$
+      - --no-database-list
+      - --max-cron-threads=0
+      - --workers=0
+    ports:
+      - "127.0.0.1:${VENDER_HTTP_PORT:-18073}:8069"
+    volumes:
+      - odoo_data:/var/lib/odoo
+    restart: unless-stopped
+    networks: [backend]
+
+volumes:
+  postgres_data:
+  odoo_data:
+
+networks:
+  backend:
