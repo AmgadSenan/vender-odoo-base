@@ -1,0 +1,145 @@
+name: Vender independent Odoo source image research
+
+on:
+  push:
+    branches:
+      - vender/architecture
+    paths:
+      - .github/workflows/vender-independent-research.yml
+      - ci/Dockerfile.standalone-research
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vender-independent-research-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: vender_independent_smoke_only
+          POSTGRES_DB: vender_independent_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U odoo -d vender_independent_smoke"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout public research Dockerfile
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+
+      - name: Checkout exact Odoo Community package source
+        uses: actions/checkout@v4
+        with:
+          repository: AmgadSenan/vender-odoo-base
+          ref: 49529f034a60e4e9838e08e0a5616e5f2f38c601
+          fetch-depth: 1
+          path: source
+          persist-credentials: false
+
+      - name: Check pinned upstream source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "49529f034a60e4e9838e08e0a5616e5f2f38c601"
+          test -f source/odoo/addons/base/__manifest__.py
+          test -f source/addons/web/__manifest__.py
+
+      - name: Build standalone experimental Odoo runtime with Ubuntu
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --file harness/ci/Dockerfile.standalone-research \
+            --tag vender/odoo-independent:source-49529f034a60 source
+
+      - name: Check source image CLI and absence of Odoo binary package
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none vender/odoo-independent:source-49529f034a60 --version
+          docker run --rm --network none vender/odoo-independent:source-49529f034a60 --help > /tmp/standalone-help.txt
+          test -s /tmp/standalone-help.txt
+          if docker run --rm --network none --entrypoint dpkg-query \
+              vender/odoo-independent:source-49529f034a60 -W odoo > /dev/null 2>&1; then
+            echo "ERROR: Unexpected official Odoo .deb in independent image" >&2
+            exit 1
+          fi
+          docker run --rm --network none --entrypoint python3 \
+            vender/odoo-independent:source-49529f034a60 \
+            -c 'import odoo,odoo.cli,pathlib; n=len(list(pathlib.Path("/opt/odoo/addons").glob("*/__manifest__.py"))); print("Odoo full-source addons:",n); assert n>500'
+
+      - name: Check patched-Qt PDF and RTL CSS with Arabic sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=vender/odoo-independent:source-49529f034a60
+          docker run --rm --network none --entrypoint wkhtmltopdf "$image" --version | tee /tmp/wk-version.txt
+          grep -q "with patched qt" /tmp/wk-version.txt
+          docker run --rm --network none --entrypoint rtlcss "$image" --version | tee /tmp/rtl-version.txt
+          grep -q "4.3.0" /tmp/rtl-version.txt
+          mkdir -p "$RUNNER_TEMP/vender-smoke"
+          chmod 777 "$RUNNER_TEMP/vender-smoke"
+          cat > "$RUNNER_TEMP/vender-smoke/input.css" <<'CSS'
+          .invoice { margin-left: 10px; padding-right: 4px; text-align: left; }
+          CSS
+          cat > "$RUNNER_TEMP/vender-smoke/arabic.html" <<'HTML'
+          <!doctype html>
+          <html lang="ar" dir="rtl">
+          <head><meta charset="utf-8"><style>
+          body { font-family: "DejaVu Sans", sans-serif; font-size: 18pt; }
+          </style></head>
+          <body><p dir="rtl">فاتورة تجريبية — اختبار العربية ١٢٣</p></body>
+          </html>
+          HTML
+          docker run --rm --network none \
+            -v "$RUNNER_TEMP/vender-smoke:/smoke" \
+            --entrypoint rtlcss "$image" \
+            /smoke/input.css /smoke/output.css
+          grep -q 'margin-right: 10px' "$RUNNER_TEMP/vender-smoke/output.css"
+          grep -q 'padding-left: 4px' "$RUNNER_TEMP/vender-smoke/output.css"
+          docker run --rm --network none \
+            -v "$RUNNER_TEMP/vender-smoke:/smoke" \
+            --entrypoint wkhtmltopdf "$image" \
+            --quiet /smoke/arabic.html /smoke/arabic.pdf
+          docker run --rm --network none \
+            -v "$RUNNER_TEMP/vender-smoke:/smoke:ro" \
+            --entrypoint python3 "$image" \
+            -c 'from pypdf import PdfReader; p="/smoke/arabic.pdf"; r=PdfReader(p); print("Generated PDF pages:",len(r.pages)); assert len(r.pages)==1'
+          echo "PDF file generated and RTL CSS flips expected properties. Arabic typography requires subsequent visual review."
+
+      - name: Initialize independent source Odoo base and web on ephemeral PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            vender/odoo-independent:source-49529f034a60 \
+            --db_host=127.0.0.1 --db_port=5432 \
+            --db_user=odoo --db_password=vender_independent_smoke_only \
+            --database=vender_independent_smoke \
+            --init=base,web --without-demo=all --stop-after-init --no-http \
+            --log-level=warn
+
+      - name: Document experimental-only result
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Standalone full-source baseline experiment"
+            echo "- Ubuntu 24.04 Python packages plus pinned official Odoo Community source."
+            echo "- No Odoo .deb and no inherited Odoo official binary image."
+            echo "- **Not production-ready:** Ubuntu and system packages require immutable locking; wkhtmltopdf and rtlcss have executable smoke checks, but full Odoo PDF reports, Arabic appearance/visual review, WebSocket, private Vender addons and production data remain untested."
+            echo "- Image remains local to this GitHub Actions job (not published/deployed)."
+          } >> "$GITHUB_STEP_SUMMARY"

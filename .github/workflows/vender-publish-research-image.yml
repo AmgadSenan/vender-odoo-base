@@ -1,0 +1,81 @@
+name: Publish disposable full-source Odoo research image
+
+on:
+  push:
+    branches:
+      - vender/architecture
+    paths:
+      - .github/workflows/vender-publish-research-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: vender-odoo-research-image
+  cancel-in-progress: false
+
+jobs:
+  publish-research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout public research Dockerfile
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Checkout exact Odoo Community source
+        uses: actions/checkout@v4
+        with:
+          repository: AmgadSenan/vender-odoo-base
+          ref: 49529f034a60e4e9838e08e0a5616e5f2f38c601
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Assert provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = 49529f034a60e4e9838e08e0a5616e5f2f38c601
+          test -f source/odoo/addons/base/__manifest__.py
+          test -f source/addons/sale/__manifest__.py
+      - name: Build disposable source image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -f harness/ci/Dockerfile.standalone-research \
+            --label org.opencontainers.image.source=https://github.com/AmgadSenan/vender-odoo-base \
+            --label org.opencontainers.image.revision=49529f034a60e4e9838e08e0a5616e5f2f38c601 \
+            -t ghcr.io/amgadsenan/vender-odoo-base:research-20261015-49529f0 source
+      - name: Check image before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --entrypoint odoo \
+            ghcr.io/amgadsenan/vender-odoo-base:research-20261015-49529f0 --version
+          docker run --rm --network none --entrypoint wkhtmltopdf \
+            ghcr.io/amgadsenan/vender-odoo-base:research-20261015-49529f0 --version
+          docker run --rm --network none --entrypoint rtlcss \
+            ghcr.io/amgadsenan/vender-odoo-base:research-20261015-49529f0 --version
+      - name: Authenticate to GitHub Container Registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Push research-tagged public-source-only image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push ghcr.io/amgadsenan/vender-odoo-base:research-20261015-49529f0
+      - name: Document limits
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Disposable research image only'
+            echo '- Contains **public Odoo Community source only** at pinned SHA 49529f034a60e4e9838e08e0a5616e5f2f38c601.'
+            echo '- **Does not contain or upload private Vender business modules**, secrets or databases.'
+            echo '- Tagged research-20261015-49529f0, no latest/stable/production tag and no deployment.'
+            echo '- For private local compatibility tests only; registry visibility depends on package settings.'
+          } >> "$GITHUB_STEP_SUMMARY"
