@@ -9,7 +9,3 @@
 **/*.pyc
 **/.pytest_cache
 **/node_modules
-*.tar
-*.tar.gz
-*.zip
-*.bundle
