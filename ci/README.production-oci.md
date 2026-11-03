@@ -14,6 +14,7 @@ Odoo service in the deployed Compose stack.
   revision label must equal the **exact commit being built**.
 - Destination: `ghcr.io/amgadsenan/vender-odoo-base` under a versioned,
   non-reused tag and a content digest `@sha256:...`.
+- Production builds must specify `ODOO_UID` and `ODOO_GID` from the currently running Odoo container and filestore volume. Local development continues to use automatic user allocation by default. A mismatch can break attachment reads/writes; never change live volume ownership to make a candidate pass.
 - Platform for the existing Lightsail deployment: `linux/amd64`, to be
   confirmed against the target host during release preparation.
 - The core image has **no Vender-private business code, production secret, or
