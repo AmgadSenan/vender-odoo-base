@@ -1,5 +1,8 @@
 # Full Odoo core OCI production image — preparation contract
 
+> **Decision override (2026-11-04):** The [adopted production release decision](https://github.com/AmgadSenan/vender-odoo-base/blob/main/docs/decisions/production-image-build-and-release.md) supersedes this document's mandatory GHCR/off-host build instructions. The current default is a controlled GitHub-source **build on the existing production server via Vender Production MCP**, with cached core reuse and the same production image tested and activated. Registry publication is optional. The technical core Dockerfile and historical tests remain useful; this external-publish procedure must **not** be treated as a required release step.
+
+
 This repository owns the **complete Odoo 20 Community source**. The production
 base image must be built from a fixed Git commit, then used as the immutable
 `FROM` base of the private `vender-business` image. It is **not** an independent
