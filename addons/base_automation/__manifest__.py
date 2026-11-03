@@ -13,10 +13,10 @@ Use automation rules to automatically trigger actions for various screens.
 Sales Team, or an opportunity which still has status pending after 14 days might
 trigger an automatic reminder email.
     """,
-    # Digest only provided a promotional tip, not an automation dependency.
-    'depends': ['base', 'resource', 'mail'],
+    'depends': ['base', 'digest', 'resource', 'mail', 'sms'],
     'data': [
         'data/base_automation_data.xml',
+        'data/digest_data.xml',
         'views/base_automation_views.xml',
         'views/ir_actions_server_views.xml',
         'security/ir.access.csv',

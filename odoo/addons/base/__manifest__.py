@@ -47,7 +47,7 @@ The kernel of Odoo, needed for all installation.
         'views/ir_qweb_widget_templates.xml',
         'views/ir_module_views.xml',
         'data/ir_module_category_data.xml',
-        # Vender technical core: Enterprise upsell catalogue excluded.
+        'data/ir_module_module.xml',
         'report/ir_module_reports.xml',
         'report/ir_module_report_templates.xml',
         'wizard/base_module_update_views.xml',
