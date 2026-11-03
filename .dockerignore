@@ -1,0 +1,11 @@
+# Avoid sending Git history, local configuration or transient build files to Docker.
+.git
+**/.git
+.env
+.env.*
+**/.env
+**/.env.*
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/node_modules
