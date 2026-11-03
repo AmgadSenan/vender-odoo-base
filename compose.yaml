@@ -1,4 +1,4 @@
-name: vender-core29
+name: vender-fullcore-base
 
 services:
   db:
@@ -19,7 +19,7 @@ services:
 
   init:
     profiles: [setup]
-    image: vender/odoo-base:core-29
+    image: vender/odoo-base:full-source-dev
     depends_on:
       db:
         condition: service_healthy
@@ -39,10 +39,10 @@ services:
     networks: [backend]
 
   odoo:
-    image: vender/odoo-base:core-29
+    image: vender/odoo-base:full-source-dev
     build:
       context: .
-      dockerfile: ci/Dockerfile.core-rc
+      dockerfile: ci/Dockerfile.core-full
       args:
         SOURCE_REVISION: ${SOURCE_REVISION:-local}
     depends_on:

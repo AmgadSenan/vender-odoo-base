@@ -1,57 +1,42 @@
-# Vender Odoo Base
+# Vender Odoo Base — Complete Odoo 20 Community source
 
-Independent **technical Odoo 20 Community foundation** for Vender, built from source rather than from the Odoo binary image. Application and business functionality belongs to [vender-business](https://github.com/AmgadSenan/vender-business).
+This public repository contains the **complete Odoo 20 Community source tree** for Vender. The full baseline is from upstream Odoo revision `1cf08cf159a01c3d040a061de3c138e943918ac4` (3 November 2026). Unlike the abandoned *core-29* experiment, no standard Odoo addons are removed or excluded from this repository solely because Vender does not currently use them.
 
-## Frozen first-phase scope
+The independent Docker runtime is built from this source; it does not install an official prebuilt Odoo image or Odoo Debian package. Vender-authored business addons live exclusively in the **private** `vender-business` repository.
 
-The checked-out source includes **exactly 29 technical Odoo addons** across `odoo/addons/` and `addons/`. It excludes all remaining business, portal, IAP, SMS and test-fixture addons from the current source tree. This is the agreed **initial** technical core, not an assertion of final architectural completeness. The history of exclusions stays in Git.
+## Addon ownership
 
-The manifest inventory and dependency boundary are enforced by `ci/test_auto_install_scope.py`. Excluded modules are not in the Docker build context's addon directories.
+- All **660** upstream Odoo addon manifests are present under `odoo/addons/` and `addons/`, with their upstream names intact.
+- Vender's original addons remain in `vender-business/addons/`, outside this public repository.
+- **No standard addon has been approved for transfer** to Vender yet. The earlier imported Odoo business addons were a superseded experiment, not an accepted ownership decision.
+- A future approved source customization may transfer an entire standard addon to the private repository, but its original files **stay in this Git source tree**. Only the *derived Vender runtime image* excludes that original copy so each technical name has one effective owner on `addons_path`.
+- Ordinary Odoo extension modules may continue to use `_inherit` without transferring an upstream addon.
 
-## Build anywhere with Docker
-
-From the root of this repository:
+## Build full-source development image
 
 ```sh
 python3 -m unittest discover -s ci -p 'test_*.py' -v
-docker build -f ci/Dockerfile.core-rc \
+docker build -f ci/Dockerfile.core-full \
   --build-arg SOURCE_REVISION="$(git rev-parse HEAD)" \
-  -t vender/odoo-base:core-29 .
-docker image inspect vender/odoo-base:core-29 --format '{{.Id}}'
+  -t vender/odoo-base:full-source-dev .
+docker run --rm --network none --entrypoint odoo vender/odoo-base:full-source-dev --version
 ```
 
-Supply an external PostgreSQL database and its credentials through the private deployment configuration. Example, with a PostgreSQL server reachable as `db` on an internal Docker network:
+The example `compose.yaml` uses PostgreSQL 17 and the same image recipe for disposable **local development only**, with browser access bound to loopback (`127.0.0.1:18073`). Supply a private `.env` based on `core.env.example`, then run:
 
 ```sh
-docker run --rm --network YOUR_PRIVATE_NETWORK vender/odoo-base:core-29 \
-  --db_host=db --db_port=5432 --db_user=YOUR_DB_USER \
-  --db_password=YOUR_DB_PASSWORD --database=YOUR_TEST_DB \
-  --init=base_automation --without-demo --stop-after-init --no-http
-```
-
-Then run the image as an Odoo service with the same database options and a persistent `/var/lib/odoo` volume. Publish the HTTP port **only** through a suitably secured reverse proxy. Do not run against an existing production database or reuse the disposable testing filestore.
-
-See [RC build and verification notes](ci/README.core-rc.md).
-
-## Run the core locally with Docker Compose
-
-The supplied `compose.yaml` builds the **same 29-addon source** and creates a fresh PostgreSQL 17 instance with persistent volumes. This example binds HTTP **only to your own computer**; it is not a public production deployment.
-
-```sh
-cp core.env.example .env
-# Set VENDER_DB_PASSWORD in .env to a long random value.
-export SOURCE_REVISION="$(git rev-parse HEAD)"
 docker compose build odoo
 docker compose up -d db
 docker compose --profile setup run --rm init
 docker compose up -d odoo
-docker compose ps
 ```
 
-Open `http://127.0.0.1:18073/web/login` (or the port in `.env`). The default initialization installs `base_automation` and its dependencies; other retained authentication and technical addons remain available for explicit installation. Use `docker compose down` to stop the example **without deleting database volumes**. Do not run `down -v` unless you intentionally want to destroy test data.
+Do not reuse production databases or filestores. Avoid `docker compose down -v` when preserving test data. Secrets must stay outside Git and need hardening before any network-accessible deployment.
 
-The sample uses a password in a local `.env` file and command-line options, which can be seen in local Docker metadata. For internet-facing use, first move credentials to an appropriate secrets/configuration mechanism and apply network and security hardening.
+For provenance, build details, and acceptance boundaries see [full-source notes](ci/README.full-source.md). The Vender-derived image and isolated production-clone browser tests are managed separately in `vender-business/development/full-core/`.
 
-## Status and provenance
+## Transition history
 
-Odoo 20 source and original licenses are retained, including the root `LICENSE`. The current scope is a first independently buildable baseline. Deployment hardening, full security assessment, deeper source refactoring, and additional business modules remain later tasks.
+The 29-addon technical-core cleanup architecture and its earlier issues, research images, and documentation are **superseded**. Historical records remain in Git and in `docs/` for audit purposes; they are not the current build, addon-selection, or deployment instructions.
+
+This architecture change does **not** declare either image production-ready. Source maintenance, dependency locking, operational hardening, and additional business customization remain separate work.

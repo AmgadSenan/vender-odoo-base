@@ -21,10 +21,13 @@ from odoo.tools.mimetypes import guess_mimetype
 from ..models.ir_attachment import SUPPORTED_IMAGE_MIMETYPES
 from ..tools import search_icons
 from .svg_utils import get_shape_svg, make_shaped_image, update_svg_colors
+from odoo.addons.iap.tools import iap_tools
 from odoo.addons.mail.tools import link_preview
 from odoo.addons.web.icons import ICONS
 
 DEFAULT_LIBRARY_ENDPOINT = 'https://media-api.odoo.com'
+DEFAULT_OLG_ENDPOINT = 'https://olg.api.odoo.com'
+DEFAULT_OTS_ENDPOINT = 'https://ots.api.odoo.com'
 API_WEBSITE_IMAGES_URL = 'https://website-image.api.odoo.com/images/'
 
 # Regex definitions to apply speed modification in SVG files
@@ -670,15 +673,51 @@ class HTML_Editor(Controller):
             ('Cache-control', 'max-age=%s' % STATIC_CACHE_LONG),
         ])
 
-    # Vender disables the Odoo-hosted paid text-generation and translation services.
-    # Keep RPC endpoints returning a clear error for older editor clients.
     @route(["/web_editor/generate_text", "/html_editor/generate_text"], type="jsonrpc", auth="user")
     def generate_text(self, prompt, conversation_history):
-        raise UserError(_("Odoo-hosted AI text generation is unavailable in Vender."))
+        if not request.env.user._is_internal():
+            raise AccessError(_("Only internal users can use AI text generation."))
+        try:
+            IrConfigParameter = request.env['ir.config_parameter'].sudo()
+            olg_api_endpoint = IrConfigParameter.get_str('html_editor.olg_api_endpoint') or DEFAULT_OLG_ENDPOINT
+            database_id = IrConfigParameter.get_str('database.uuid')
+            response = iap_tools.iap_jsonrpc(olg_api_endpoint + "/api/olg/1/chat", params={
+                'prompt': prompt,
+                'conversation_history': conversation_history or [],
+                'database_id': database_id,
+            }, timeout=30)
+            if response['status'] == 'success':
+                return response['content']
+            elif response['status'] == 'error_prompt_too_long':
+                raise UserError(_("Sorry, your prompt is too long. Try to say it in fewer words."))
+            elif response['status'] == 'limit_call_reached':
+                raise UserError(_("You have reached the maximum number of requests for this service. Try again later."))
+            else:
+                raise UserError(_("Sorry, we could not generate a response. Please try again later."))
+        except requests.RequestException:
+            raise UserError(_("Oops, it looks like our AI is unreachable!"))
 
     @route(["/web_editor/google_translate", "/html_editor/google_translate"], type="jsonrpc", auth="user")
     def google_translate(self, originalText, targetLang):
-        raise UserError(_("Odoo-hosted translation is unavailable in Vender."))
+        try:
+            IrConfigParameter = request.env['ir.config_parameter'].sudo()
+            gtl_api_endpoint = DEFAULT_OTS_ENDPOINT
+            db_uuid = IrConfigParameter.get_str('database.uuid')
+            response = iap_tools.iap_jsonrpc(gtl_api_endpoint + "/api/html_editor_translate/1/google_translate", params={
+                'original_text': originalText,
+                'target_lang': targetLang,
+                'db_uuid': db_uuid,
+            }, timeout=30)
+
+            if response['status'] == 'success':
+                return {'translated_text': response['translated_text'], 'isError': False}
+            if response['status'] == 'limit_call_reached':
+                raise UserError(_("You have reached the maximum number of requests for this service. Try again later."))
+            if response['status'] == 'text_too_long':
+                raise UserError(_("The text you are trying to translate is too long. Please select less text and try it again."))
+            raise UserError(_("Sorry, we could not translate the text. Please try again later."))
+        except requests.RequestException:
+            raise UserError(_("Oops, it looks like google translation service is unreachable!"))
 
     @route(["/web_editor/get_ice_servers", "/html_editor/get_ice_servers"], type='jsonrpc', auth="user")
     def get_ice_servers(self):

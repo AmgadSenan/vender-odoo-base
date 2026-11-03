@@ -1,0 +1,33 @@
+name: Verify complete Odoo 20 source
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify source inventory and existing safe audit tests
+        run: python3 -m unittest discover -s ci -p 'test_*.py' -v
+      - name: Confirm no duplicate upstream Odoo addon names
+        run: |
+          python3 ci/audit_addon_ownership.py --base-root . --require-unique-owner > /tmp/odoo-ownership.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path("/tmp/odoo-ownership.json").read_text())
+          assert report["scanned"] >= 650, report["scanned"]
+          assert not report["duplicates"], report["duplicates"]
+          print("Source addons:", report["scanned"])
+          PY

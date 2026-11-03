@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-11-03):** This is the original 2026-10-31 extraction/cleanup proposal, not Vender's current architecture. The approved design preserves all original Odoo 20 addons in the public core source. See [FULL_CORE_ARCHITECTURE_20261103.md](FULL_CORE_ARCHITECTURE_20261103.md). Do not execute incremental addon-cleanup cycles from this document.
+
 # Vender Odoo Base — Architecture Decision (2026-10-31)
 
 ## Purpose
