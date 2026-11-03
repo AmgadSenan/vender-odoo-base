@@ -1,5 +1,7 @@
 # Vender Odoo Base — Complete Odoo 20 Community source
 
+> **Production release strategy (adopted 2026-11-04):** [Build and release decision](docs/decisions/production-image-build-and-release.md). The existing production host builds or reuses the pinned core image through Vender Production MCP. GitHub Actions/GHCR are optional, not deployment prerequisites; older external-build/publish guidance is historical.
+
 This public repository contains the **complete Odoo 20 Community source tree** for Vender. The full baseline is from upstream Odoo revision `1cf08cf159a01c3d040a061de3c138e943918ac4` (3 November 2026). Unlike the abandoned *core-29* experiment, no standard Odoo addons are removed or excluded from this repository solely because Vender does not currently use them.
 
 The independent Docker runtime is built from this source; it does not install an official prebuilt Odoo image or Odoo Debian package. Vender-authored business addons live exclusively in the **private** `vender-business` repository.
