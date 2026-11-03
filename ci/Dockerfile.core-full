@@ -60,11 +60,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-markdown2 python3-ldap \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --system --create-home --home-dir /var/lib/odoo \
-      --shell /usr/sbin/nologin odoo \
-    && mkdir -p /opt/odoo /etc/odoo \
-    && chown -R odoo:odoo /var/lib/odoo /opt/odoo \
-    && printf '[options]\naddons_path = /opt/odoo/odoo/addons,/opt/odoo/addons\ndata_dir = /var/lib/odoo\n' > /etc/odoo/odoo.conf
+# Development keeps the original automatic UID/GID allocation.
+# Production passes the numeric owner of the existing filestore volume.
+ARG ODOO_UID=auto
+ARG ODOO_GID=auto
+RUN set -eu; \
+    if [ "$ODOO_UID" = "auto" ] && [ "$ODOO_GID" = "auto" ]; then \
+      useradd --system --create-home --home-dir /var/lib/odoo \
+        --shell /usr/sbin/nologin odoo; \
+    else \
+      case "$ODOO_UID" in ''|*[!0-9]*) exit 1;; esac; \
+      case "$ODOO_GID" in ''|*[!0-9]*) exit 1;; esac; \
+      groupadd --system --gid "$ODOO_GID" odoo; \
+      useradd --system --uid "$ODOO_UID" --gid "$ODOO_GID" \
+        --create-home --home-dir /var/lib/odoo \
+        --shell /usr/sbin/nologin odoo; \
+    fi; \
+    mkdir -p /opt/odoo /etc/odoo; \
+    chown -R odoo:odoo /var/lib/odoo /opt/odoo; \
+    printf '[options]\naddons_path = /opt/odoo/odoo/addons,/opt/odoo/addons\ndata_dir = /var/lib/odoo\n' > /etc/odoo/odoo.conf
 
 COPY --chown=odoo:odoo odoo/ /opt/odoo/odoo/
 COPY --chown=odoo:odoo addons/ /opt/odoo/addons/
