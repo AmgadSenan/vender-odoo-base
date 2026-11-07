@@ -23,8 +23,10 @@ class FullSourceInventoryTests(unittest.TestCase):
 
     def test_full_source_dockerfile_keeps_both_addon_trees(self):
         dockerfile = (ROOT / "ci" / "Dockerfile.core-full").read_text()
-        self.assertIn("COPY --chown=odoo:odoo odoo/ /opt/odoo/odoo/", dockerfile)
-        self.assertIn("COPY --chown=odoo:odoo addons/ /opt/odoo/addons/", dockerfile)
+        self.assertIn("COPY --chown=${ODOO_UID}:${ODOO_GID} odoo/ /opt/odoo/odoo/", dockerfile)
+        self.assertIn("COPY --chown=${ODOO_UID}:${ODOO_GID} addons/ /opt/odoo/addons/", dockerfile)
+        self.assertIn("ARG ODOO_UID=100", dockerfile)
+        self.assertIn("ARG ODOO_GID=101", dockerfile)
         self.assertNotIn("COPY --from=core-29", dockerfile)
 
 

@@ -60,15 +60,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-markdown2 python3-ldap \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --system --create-home --home-dir /var/lib/odoo \
+ARG ODOO_UID=100
+ARG ODOO_GID=101
+RUN set -eux; \
+    if ! getent group "$ODOO_GID" >/dev/null; then groupadd --gid "$ODOO_GID" odoo; fi; \
+    useradd --system --uid "$ODOO_UID" --gid "$ODOO_GID" --create-home --home-dir /var/lib/odoo \
       --shell /usr/sbin/nologin odoo \
     && mkdir -p /opt/odoo /etc/odoo \
-    && chown -R odoo:odoo /var/lib/odoo /opt/odoo \
+    && chown -R "$ODOO_UID:$ODOO_GID" /var/lib/odoo /opt/odoo \
     && printf '[options]\naddons_path = /opt/odoo/odoo/addons,/opt/odoo/addons\ndata_dir = /var/lib/odoo\n' > /etc/odoo/odoo.conf
 
-COPY --chown=odoo:odoo odoo/ /opt/odoo/odoo/
-COPY --chown=odoo:odoo addons/ /opt/odoo/addons/
-COPY --chown=odoo:odoo odoo-bin /usr/local/bin/odoo
+COPY --chown=${ODOO_UID}:${ODOO_GID} odoo/ /opt/odoo/odoo/
+COPY --chown=${ODOO_UID}:${ODOO_GID} addons/ /opt/odoo/addons/
+COPY --chown=${ODOO_UID}:${ODOO_GID} odoo-bin /usr/local/bin/odoo
 RUN chmod 0755 /usr/local/bin/odoo
 
 ARG SOURCE_REVISION=unknown
